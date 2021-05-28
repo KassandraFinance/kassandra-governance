@@ -1,9 +1,16 @@
 {
-  "name": "@uniswap/governance",
-  "version": "1.0.2",
-  "description": "🏛 Governance contracts for the Uniswap protocol",
-  "author": "Noah Zinsmeister",
-  "license": "MIT",
+  "name": "@kassandra/governance",
+  "version": "1.0.0",
+  "description": "Governance contracts for the Kassandra protocol",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KassandraFinance/kassandra-governance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KassandraFinance/kassandra-governance/issues"
+  },
+  "homepage": "https://github.com/KassandraFinance/kassandra-governance#readme",
   "files": [
     "build"
   ],
