@@ -1,4 +1,6 @@
-pragma solidity ^0.5.16;
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+pragma solidity >=0.8.0 <0.9.0;
 
 // this contract serves as feeToSetter, allowing owner to manage fees in the context of a specific feeTo implementation
 contract FeeToSetter {
@@ -9,7 +11,7 @@ contract FeeToSetter {
 
     address public owner;
 
-    constructor(address factory_, uint vestingEnd_, address owner_, address feeTo_) public {
+    constructor(address factory_, uint vestingEnd_, address owner_, address feeTo_) {
         require(vestingEnd_ > block.timestamp, 'FeeToSetter::constructor: vesting must end after deployment');
         factory = factory_;
         vestingEnd = vestingEnd_;

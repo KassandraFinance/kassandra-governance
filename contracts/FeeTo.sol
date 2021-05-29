@@ -1,4 +1,6 @@
-pragma solidity ^0.5.16;
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+pragma solidity >=0.8.0 <0.9.0;
 
 // this contract gives owner the ability to allow tokens. for pairs in which both tokens are allowed, fees may be
 // collected on that pair and send to feeRecipient, though only after burning all fees up to that point
@@ -18,7 +20,7 @@ contract FeeTo {
     }
     mapping(address => PairAllowState) public pairAllowStates;
 
-    constructor(address owner_) public {
+    constructor(address owner_) {
         owner = owner_;
     }
 

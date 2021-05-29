@@ -1,10 +1,8 @@
-pragma solidity ^0.5.16;
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-import "./SafeMath.sol";
+pragma solidity >=0.8.0 <0.9.0;
 
 contract TreasuryVester {
-    using SafeMath for uint;
-
     address public uni;
     address public recipient;
 
@@ -22,7 +20,7 @@ contract TreasuryVester {
         uint vestingBegin_,
         uint vestingCliff_,
         uint vestingEnd_
-    ) public {
+    ) {
         require(vestingBegin_ >= block.timestamp, 'TreasuryVester::constructor: vesting begin too early');
         require(vestingCliff_ >= vestingBegin_, 'TreasuryVester::constructor: cliff is too early');
         require(vestingEnd_ > vestingCliff_, 'TreasuryVester::constructor: end is too early');
@@ -49,7 +47,7 @@ contract TreasuryVester {
         if (block.timestamp >= vestingEnd) {
             amount = IUni(uni).balanceOf(address(this));
         } else {
-            amount = vestingAmount.mul(block.timestamp - lastUpdate).div(vestingEnd - vestingBegin);
+            amount = (vestingAmount * (block.timestamp - lastUpdate)) / (vestingEnd - vestingBegin);
             lastUpdate = block.timestamp;
         }
         IUni(uni).transfer(recipient, amount);
