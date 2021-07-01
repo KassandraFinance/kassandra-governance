@@ -151,12 +151,12 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
     function stake(uint256 pid, uint256 amount, address stakeFor, address delegatee) external nonReentrant whenNotPaused updateReward(pid, msg.sender) {
         require(amount > 0, "Staking::stake: cannot stake 0");
 
-		/// @dev Stake for the sender if not specified otherwise.
+		// Stake for the sender if not specified otherwise.
 		if (stakeFor == address(0)) {
 			stakeFor = msg.sender;
 		}
 
-		/// @dev Delegate for stakeFor if not specified otherwise.
+		// Delegate for stakeFor if not specified otherwise.
 		if (delegatee == address(0)) {
 			delegatee = stakeFor;
 		}
@@ -164,28 +164,28 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][stakeFor];
 
-        /// @dev Reset withdrawDelay due to new stake
+        //  Reset withdrawDelay due to new stake
         if (pool.withdrawDelay != 0 && user.withdrawRequestTime != 0){
             user.withdrawRequestTime = 0;
             _undelayVotingPower(pid, stakeFor);
         }
 
-        /// @dev Decrease voting power of previous delegatee
+        // Decrease voting power of previous delegatee
 		address previousDelegatee = user.delegatee;
 		if (previousDelegatee != delegatee) {
             uint256 previousVotingPower = user.amount * pool.votingMultiplier;
 			_decreaseVotingPower(previousDelegatee, previousVotingPower);
-			/// @dev Update delegatee.
+			// Update delegatee.
 			user.delegatee = delegatee;
 		}
 
-        /// @dev Update stake parms
+        //  Update stake parms
         pool.depositedAmount = pool.depositedAmount + amount;
         user.amount = user.amount + amount;
         user.depositTime = block.timestamp; // vul outra parte depositar e foder vc
         kacy.safeTransferFrom(msg.sender, address(this), amount);
 
-        /// @dev Increase voting power of new delegatee
+        // Increase voting power of new delegatee
         uint256 newVotingPower = amount * pool.votingMultiplier;
         _increaseVotingPower(delegatee, newVotingPower);
 
@@ -204,10 +204,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
         require(amount <= availableWithdraw(pid, msg.sender), "Staking::withdraw: cannot withdraw more than available");
         require(amount > 0, "Staking::withdraw: cannot withdraw 0");
 
-        /// @dev If withdrawable: withdraw
+        //  If withdrawable: withdraw
         if (withdrawable(pid, msg.sender)) {
 
-            /// @dev Remove voting power
+            // Remove voting power
             uint256 votingPower = _getPoolDelegatorVotes(pid, msg.sender);
             _decreaseVotingPower(user.delegatee, votingPower);
 
@@ -217,14 +217,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
             kacy.safeTransfer(msg.sender, amount);
             emit Withdrawn(pid, msg.sender, amount);
 
-        /// @dev If pool with `withdrawDelay` and it's the first withdraw request: start withdrawal delay
+        // If pool with `withdrawDelay` and it's the first withdraw request: start withdrawal delay
         } else if (user.withdrawRequestTime == 0 && pool.withdrawDelay != 0) { 
             _delayVotingPower(pid, user.delegatee);
-            /// @dev Setting `withdrawRequestTime` to different than zero starts the withdrawal delay
+            // Setting `withdrawRequestTime` to different than zero starts the withdrawal delay
             user.withdrawRequestTime = block.timestamp;
             emit Vesting(pid, msg.sender, amount, lockUntil(pid, msg.sender));
 
-        /// @dev Only gets here during `lockPeriod` or running `withdrawDelay`: tokens are locked
+        // Only gets here during `lockPeriod` or running `withdrawDelay`: tokens are locked
         } else {
             emit WithdrawDenied(pid, msg.sender, amount, lockUntil(pid, msg.sender));
         }
@@ -292,8 +292,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
         );
     }
 
-    /// @dev Governance only to add rewards to the pool
-    /// @notice Rewards should first be transfered before calling this function
+    /// @dev Governance only to add rewards to the pool. Rewards should first be transfered before calling this function.
     function notifyRewardAmount(uint256 pid, uint256 reward) external onlyGov updateReward(pid, address(0)) {
         PoolInfo storage pool = poolInfo[pid];
         if (block.timestamp >= pool.periodFinish) {
@@ -304,10 +303,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
             pool.rewardRate = (reward + leftover) / pool.rewardsDuration;
         }
 
-        /// @dev Ensure the provided reward amount is not more than the balance in the contract.
-        /// This keeps the reward rate in the right range, preventing overflows due to
-        /// very high values of rewardRate in the earned and rewardsPerToken functions;
-        /// Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
+        //  Ensure the provided reward amount is not more than the balance in the contract.
+        // This keeps the reward rate in the right range, preventing overflows due to
+        // very high values of rewardRate in the earned and rewardsPerToken functions;
+        // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
         uint256 balance = kacy.balanceOf(address(this));
         require(pool.rewardRate <= (balance / pool.rewardsDuration), "Staking::notifyRewardAmount: provided reward too high");
 
