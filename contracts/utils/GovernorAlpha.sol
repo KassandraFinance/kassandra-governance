@@ -4,13 +4,24 @@ pragma solidity >=0.8.0 <0.9.0;
 
 contract GovernorAlpha {
     /// @notice The name of this contract
-    string public constant name = "Uniswap Governor Alpha";
+    string public constant name = "Kassandra Governor Alpha";
 
+
+    // ====== REVISITAR ====== ///
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
-    function quorumVotes() public pure returns (uint) { return 40_000_000e18; } // 4% of Uni
+    function quorumVotes() public view returns (uint) {
+        // 4% of total voting power
+        uint256 quorum = kassandra.getTotalVotes() / 25;
+        return quorum; 
+    } 
 
     /// @notice The number of votes required in order for a voter to become a proposer
-    function proposalThreshold() public pure returns (uint) { return 10_000_000e18; } // 1% of Uni
+    function proposalThreshold() public view returns (uint) {
+        // 1% of total voting power
+        uint256 threshold = kassandra.getTotalVotes() / 100;
+        return threshold; 
+    }
+    // ====== ========= ====== ///
 
     /// @notice The maximum number of actions that can be included in a proposal
     function proposalMaxOperations() public pure returns (uint) { return 10; } // 10 actions
@@ -21,11 +32,11 @@ contract GovernorAlpha {
     /// @notice The duration of voting on a proposal, in blocks
     function votingPeriod() public pure returns (uint) { return 40_320; } // ~7 days in blocks (assuming 15s blocks)
 
-    /// @notice The address of the Uniswap Protocol Timelock
+    /// @notice The address of the Kassandra Protocol Timelock
     TimelockInterface public timelock;
 
-    /// @notice The address of the Uniswap governance token
-    UniInterface public uni;
+    /// @notice The address of the Kassandra staking pools contract
+    IStaking public kassandra;
 
     /// @notice The total number of proposals
     uint public proposalCount;
@@ -110,13 +121,13 @@ contract GovernorAlpha {
     /// @notice An event emitted when a proposal has been executed in the Timelock
     event ProposalExecuted(uint id);
 
-    constructor(address timelock_, address uni_) {
+    constructor(address timelock_, address staking_) {
         timelock = TimelockInterface(timelock_);
-        uni = UniInterface(uni_);
+        kassandra = IStaking(staking_);
     }
 
     function propose(address[] memory targets, uint[] memory values, string[] memory signatures, bytes[] memory calldatas, string memory description) public returns (uint) {
-        require(uni.getPriorVotes(msg.sender, block.number - 1) > proposalThreshold(), "GovernorAlpha::propose: proposer votes below proposal threshold");
+        require(kassandra.getPriorVotes(msg.sender, block.number - 1) > proposalThreshold(), "GovernorAlpha::propose: proposer votes below proposal threshold");
         require(targets.length == values.length && targets.length == signatures.length && targets.length == calldatas.length, "GovernorAlpha::propose: proposal function information arity mismatch");
         require(targets.length != 0, "GovernorAlpha::propose: must provide actions");
         require(targets.length <= proposalMaxOperations(), "GovernorAlpha::propose: too many actions");
@@ -184,7 +195,7 @@ contract GovernorAlpha {
         require(cur_state != ProposalState.Executed, "GovernorAlpha::cancel: cannot cancel executed proposal");
 
         Proposal storage proposal = proposals[proposalId];
-        require(uni.getPriorVotes(proposal.proposer, block.number - 1) < proposalThreshold(), "GovernorAlpha::cancel: proposer above threshold");
+        require(kassandra.getPriorVotes(proposal.proposer, block.number - 1) < proposalThreshold(), "GovernorAlpha::cancel: proposer above threshold");
 
         proposal.canceled = true;
         for (uint i = 0; i < proposal.targets.length; i++) {
@@ -243,7 +254,7 @@ contract GovernorAlpha {
         Proposal storage proposal = proposals[proposalId];
         Receipt storage receipt = proposal.receipts[voter];
         require(receipt.hasVoted == false, "GovernorAlpha::_castVote: voter already voted");
-        uint96 votes = uni.getPriorVotes(voter, proposal.startBlock);
+        uint96 votes = kassandra.getPriorVotes(voter, proposal.startBlock);
 
         if (support) {
             proposal.forVotes = proposal.forVotes + votes;
@@ -273,6 +284,7 @@ interface TimelockInterface {
     function executeTransaction(address target, uint value, string calldata signature, bytes calldata data, uint eta) external payable returns (bytes memory);
 }
 
-interface UniInterface {
+interface IStaking {
+    function getTotalVotes() external view returns (uint256);
     function getPriorVotes(address account, uint blockNumber) external view returns (uint96);
 }

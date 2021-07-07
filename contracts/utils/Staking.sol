@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "./ReentrancyGuard.sol";
-import "./Pausable.sol";
+import "../utils/ReentrancyGuard.sol";
+import "../utils/Pausable.sol";
+import "../utils/SafeERC20.sol";
+import "../utils/Ownable.sol";
 import "./StakingGov.sol";
-import "./SafeERC20.sol";
 
-contract Staking is StakingGov, Pausable, ReentrancyGuard {
+contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     using SafeERC20 for IERC20;
 
@@ -163,6 +164,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
 
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][stakeFor];
+        IERC20 rewardToken = IERC20(pool.stakingToken);
 
         //  Reset withdrawDelay due to new stake
         if (pool.withdrawDelay != 0 && user.withdrawRequestTime != 0){
@@ -179,11 +181,11 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
 			user.delegatee = delegatee;
 		}
 
-        //  Update stake parms
+        // Update stake parms
         pool.depositedAmount = pool.depositedAmount + amount;
         user.amount = user.amount + amount;
-        user.depositTime = block.timestamp; // vul outra parte depositar e foder vc
-        kacy.safeTransferFrom(msg.sender, address(this), amount);
+        user.depositTime = block.timestamp;
+        rewardToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Increase voting power of new delegatee
         uint256 newVotingPower = amount * pool.votingMultiplier;
@@ -200,6 +202,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
     function withdraw(uint256 pid, uint256 amount) public nonReentrant updateReward(pid, msg.sender) {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][msg.sender];
+
         require(block.timestamp >= (user.depositTime + pool.lockPeriod), 'Staking::withdraw: tokens locked');
         require(amount <= availableWithdraw(pid, msg.sender), "Staking::withdraw: cannot withdraw more than available");
         require(amount > 0, "Staking::withdraw: cannot withdraw 0");
@@ -211,10 +214,12 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
             uint256 votingPower = _getPoolDelegatorVotes(pid, msg.sender);
             _decreaseVotingPower(user.delegatee, votingPower);
 
+            IERC20 rewardToken = IERC20(pool.stakingToken);
+
             pool.depositedAmount = pool.depositedAmount - amount;
             user.amount = user.amount - amount;
             user.rewardsDebt = user.rewardsDebt - amount;
-            kacy.safeTransfer(msg.sender, amount);
+            rewardToken.safeTransfer(msg.sender, amount);
             emit Withdrawn(pid, msg.sender, amount);
 
         // If pool with `withdrawDelay` and it's the first withdraw request: start withdrawal delay
@@ -274,10 +279,11 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    /// @dev Governance only function to add new staking pool
-    function addPool(uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyGov {
+    /// @dev Add new staking pool
+    function addPool(address _stakingToken, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
         poolInfo.push(
             PoolInfo({
+                stakingToken: _stakingToken,
                 depositedAmount: 0,
                 lastUpdateTime: 0,
                 rewardPerTokenStored: 0,
@@ -292,14 +298,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
         );
     }
 
-    /// @dev Governance only to add rewards to the pool. Rewards should first be transfered before calling this function.
-    function notifyRewardAmount(uint256 pid, uint256 reward) external onlyGov updateReward(pid, address(0)) {
+    /// @dev Add rewards to the pool. Rewards should first be transfered before calling this function.
+    function notifyRewardAmount(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
         PoolInfo storage pool = poolInfo[pid];
         if (block.timestamp >= pool.periodFinish) {
-            pool.rewardRate = (reward / pool.rewardsDuration);
+            pool.rewardRate = reward / pool.rewardsDuration;
         } else {
             uint256 remaining = pool.periodFinish - block.timestamp;
-            uint256 leftover = (remaining * pool.rewardRate);
+            uint256 leftover = remaining * pool.rewardRate;
             pool.rewardRate = (reward + leftover) / pool.rewardsDuration;
         }
 
@@ -316,13 +322,22 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
     }
 
     /// @dev End rewards emission earlier
-    function updatePeriodFinish(uint256 pid, uint256 timestamp) external onlyGov updateReward(pid, address(0)) {
+    function updatePeriodFinish(uint256 pid, uint256 timestamp) external onlyOwner updateReward(pid, address(0)) {
         PoolInfo storage pool = poolInfo[pid];
         pool.periodFinish = timestamp;
     }
 
-    /// @dev Governance only function to set rewards distribution duration
-    function setRewardsDuration(uint256 pid, uint256 _rewardsDuration) external onlyGov {
+    /// @dev Recover tokens from pool
+    function recoverERC20(uint256 pid, address tokenAddress, uint256 tokenAmount) external onlyOwner {
+        PoolInfo storage pool = poolInfo[pid];
+        require(tokenAddress != address(pool.stakingToken), "Cannot withdraw the staking token");
+        address owner = getController();
+        IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
+    }
+
+    /// @dev Set new rewards distribution duration
+    function setRewardsDuration(uint256 pid, uint256 _rewardsDuration) external onlyOwner {
         PoolInfo storage pool = poolInfo[pid];
         require(
             block.timestamp > pool.periodFinish,
@@ -355,11 +370,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
         _;
     }
 
-    /// @dev under development modifier to allow only the governance call the functions
-    modifier onlyGov() {
-        _;
-    }
-
     /* ========== EVENTS ========== */
 
     event RewardAdded(uint256 reward);
@@ -370,5 +380,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard {
     event RewardPaid(uint256 indexed pid, address indexed user, uint256 reward);
     event RewardDenied(uint256 indexed pid, address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 indexed pid, uint256 duration);
+    event Recovered(address token, uint256 amount);
 
 }

@@ -8,6 +8,14 @@ contract StakingGov is StakingStorage {
     /* ========== VIEWS ========== */
 
     /**
+     * @notice Gets the current sum of votes balance all accounts in all pools
+     * @return The number of current total votes
+     */
+    function getTotalVotes() external view returns (uint256) {
+        return totalVotes;
+    }
+
+    /**
      * @notice Gets the current votes balance for `account`
      * @param account The address to get votes balance
      * @return The number of current votes for `account`
@@ -116,6 +124,7 @@ contract StakingGov is StakingStorage {
             uint32 nCheckpoints = numCheckpoints[delegatee];
             uint256 oldVotingPower = nCheckpoints > 0 ? checkpoints[delegatee][nCheckpoints - 1].votes : 0;
             uint256 newVotingPower = oldVotingPower - votes;
+            totalVotes -= votes;
             _writeCheckpoint(delegatee, nCheckpoints, oldVotingPower, newVotingPower);
     }
 
@@ -123,6 +132,7 @@ contract StakingGov is StakingStorage {
             uint32 nCheckpoints = numCheckpoints[delegatee];
             uint256 oldVotingPower = nCheckpoints > 0 ? checkpoints[delegatee][nCheckpoints - 1].votes : 0;
             uint256 newVotingPower = oldVotingPower + votes;
+            totalVotes += votes;
             _writeCheckpoint(delegatee, nCheckpoints, oldVotingPower, newVotingPower);
     }
 

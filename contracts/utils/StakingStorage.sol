@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "./IERC20.sol";
+import "../utils/IERC20.sol";
 
 contract StakingStorage {
 
@@ -27,6 +27,7 @@ contract StakingStorage {
     /// @dev `vestingPeriod` is a time period that starts after the `lockPeriod` that will linear release the withdrawable amount
     struct PoolInfo {
         // General data
+        address stakingToken;
         uint256 depositedAmount;
         // Rewards data and params
         uint256 lastUpdateTime;
@@ -49,6 +50,9 @@ contract StakingStorage {
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
 
 	/************************** Checkpoints ******************************/
+
+    /// @dev A aggregated record of the total voting power of all accounts
+    uint256 totalVotes;
 
     /// @dev A checkpoint for marking the voting power from a given block
     struct Checkpoint {
