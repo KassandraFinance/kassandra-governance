@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import "../utils/ReentrancyGuard.sol";
-import "../utils/Pausable.sol";
-import "../utils/SafeERC20.sol";
-import "../utils/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./StakingGov.sol";
 
 contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
@@ -331,7 +331,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     function recoverERC20(uint256 pid, address tokenAddress, uint256 tokenAmount) external onlyOwner {
         PoolInfo storage pool = poolInfo[pid];
         require(tokenAddress != address(pool.stakingToken), "Cannot withdraw the staking token");
-        address owner = getController();
+        address owner = owner();
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
         emit Recovered(tokenAddress, tokenAmount);
     }
