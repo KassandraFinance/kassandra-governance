@@ -41,7 +41,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      */
     function lastTimeRewardApplicable(uint pid) public view poolInteraction(pid) returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
-        return pool.lastUpdateTime;
+        return min(block.timestamp, pool.periodFinish);
     }
 
     /**
@@ -139,6 +139,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         return a > b ? a : b;
     }
 
+    function min(uint a, uint b) private pure returns (uint) {
+        return a < b ? a : b;
+    }
+
     /* ========== MUTATIVE FUNCTIONS ========== */
 
 	/**
@@ -164,7 +168,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][stakeFor];
-        IERC20 rewardToken = IERC20(pool.stakingToken);
+        IERC20 stakingToken = IERC20(pool.stakingToken);
 
         //  Reset withdrawDelay due to new stake
         if (pool.withdrawDelay != 0 && user.withdrawRequestTime != 0){
@@ -185,7 +189,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         pool.depositedAmount = pool.depositedAmount + amount;
         user.amount = user.amount + amount;
         user.depositTime = block.timestamp;
-        rewardToken.safeTransferFrom(msg.sender, address(this), amount);
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Increase voting power of new delegatee
         uint256 newVotingPower = amount * pool.votingMultiplier;
@@ -211,15 +215,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         if (withdrawable(pid, msg.sender)) {
 
             // Remove voting power
-            uint256 votingPower = _getPoolDelegatorVotes(pid, msg.sender);
+            uint256 votingPower = user.withdrawRequestTime == 0 ? amount * pool.votingMultiplier : amount;
             _decreaseVotingPower(user.delegatee, votingPower);
-
-            IERC20 rewardToken = IERC20(pool.stakingToken);
+            IERC20 stakingToken = IERC20(pool.stakingToken);
 
             pool.depositedAmount = pool.depositedAmount - amount;
             user.amount = user.amount - amount;
             user.rewardsDebt = user.rewardsDebt - amount;
-            rewardToken.safeTransfer(msg.sender, amount);
+            stakingToken.safeTransfer(msg.sender, amount);
             emit Withdrawn(pid, msg.sender, amount);
 
         // If pool with `withdrawDelay` and it's the first withdraw request: start withdrawal delay
@@ -280,12 +283,12 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /* ========== RESTRICTED FUNCTIONS ========== */
 
     /// @dev Add new staking pool
-    function addPool(address _stakingToken, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
+      function addPool(address _stakingToken, uint256 startingTime, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
         poolInfo.push(
             PoolInfo({
                 stakingToken: _stakingToken,
                 depositedAmount: 0,
-                lastUpdateTime: 0,
+                lastUpdateTime: startingTime,
                 rewardPerTokenStored: 0,
                 rewardsDuration: _rewardsDuration,
                 rewardRate: 0,
@@ -298,8 +301,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         );
     }
 
-    /// @dev Add rewards to the pool. Rewards should first be transfered before calling this function.
-    function notifyRewardAmount(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
+    /// @dev Add rewards to the pool
+    function addReward(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
+        kacy.safeTransferFrom(msg.sender, address(this), reward);
+
         PoolInfo storage pool = poolInfo[pid];
         if (block.timestamp >= pool.periodFinish) {
             pool.rewardRate = reward / pool.rewardsDuration;
@@ -308,13 +313,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
             uint256 leftover = remaining * pool.rewardRate;
             pool.rewardRate = (reward + leftover) / pool.rewardsDuration;
         }
-
-        //  Ensure the provided reward amount is not more than the balance in the contract.
-        // This keeps the reward rate in the right range, preventing overflows due to
-        // very high values of rewardRate in the earned and rewardsPerToken functions;
-        // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
-        uint256 balance = kacy.balanceOf(address(this));
-        require(pool.rewardRate <= (balance / pool.rewardsDuration), "Staking::notifyRewardAmount: provided reward too high");
 
         pool.lastUpdateTime = block.timestamp;
         pool.periodFinish = (block.timestamp + pool.rewardsDuration);
@@ -345,6 +343,11 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         );
         pool.rewardsDuration = _rewardsDuration;
         emit RewardsDurationUpdated(pid, pool.rewardsDuration);
+    }
+    
+    /// @dev Set the governance and reward token
+    function setKacy(address _kacy) external onlyOwner {
+        kacy = IERC20(_kacy);
     }
 
     /* ========== MODIFIERS ========== */
