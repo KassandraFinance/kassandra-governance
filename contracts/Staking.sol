@@ -213,7 +213,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         //  If withdrawable: withdraw
         if (withdrawable(pid, msg.sender)) {
-
             // Remove voting power
             uint256 votingPower = user.withdrawRequestTime == 0 ? amount * pool.votingMultiplier : amount;
             _decreaseVotingPower(user.delegatee, votingPower);
@@ -283,12 +282,12 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /* ========== RESTRICTED FUNCTIONS ========== */
 
     /// @dev Add new staking pool
-      function addPool(address _stakingToken, uint256 startingTime, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
+      function addPool(address _stakingToken, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
         poolInfo.push(
             PoolInfo({
                 stakingToken: _stakingToken,
                 depositedAmount: 0,
-                lastUpdateTime: startingTime,
+                lastUpdateTime: 0,
                 rewardPerTokenStored: 0,
                 rewardsDuration: _rewardsDuration,
                 rewardRate: 0,
@@ -299,13 +298,16 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
                 votingMultiplier: _votingMultiplier
             })
         );
+        emit NewPool(poolInfo.length - 1);
     }
 
     /// @dev Add rewards to the pool
     function addReward(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
+        PoolInfo storage pool = poolInfo[pid];
+        require(pool.rewardsDuration > 0, "Staking::addReward: rewardDuration must be greater than zero");
+
         kacy.safeTransferFrom(msg.sender, address(this), reward);
 
-        PoolInfo storage pool = poolInfo[pid];
         if (block.timestamp >= pool.periodFinish) {
             pool.rewardRate = reward / pool.rewardsDuration;
         } else {
@@ -316,7 +318,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         pool.lastUpdateTime = block.timestamp;
         pool.periodFinish = (block.timestamp + pool.rewardsDuration);
-        emit RewardAdded(reward);
+        emit RewardAdded(pid, reward);
     }
 
     /// @dev End rewards emission earlier
@@ -331,7 +333,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         require(tokenAddress != address(pool.stakingToken), "Cannot withdraw the staking token");
         address owner = owner();
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
-        emit Recovered(tokenAddress, tokenAmount);
+        emit Recovered(pid, tokenAddress, tokenAmount);
     }
 
     /// @dev Set new rewards distribution duration
@@ -356,9 +358,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     modifier updateReward(uint pid, address account) {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][account];
+        
+        if (poolInfo[pid].lastUpdateTime == 0) {
+            pool.lastUpdateTime = block.timestamp;
+        } else {
+            pool.rewardPerTokenStored = rewardPerToken(pid);
+            pool.lastUpdateTime = lastTimeRewardApplicable(pid);
+        }
 
-        pool.rewardPerTokenStored = rewardPerToken(pid);
-        pool.lastUpdateTime = lastTimeRewardApplicable(pid);
 
         if (account != address(0)) {
             user.pendingRewards = earned(pid, account);
@@ -375,7 +382,8 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     /* ========== EVENTS ========== */
 
-    event RewardAdded(uint256 reward);
+    event NewPool(uint256 indexed pid);
+    event RewardAdded(uint256 indexed pid, uint256 indexed reward);
     event Staked(uint256 indexed pid, address indexed user, uint256 amount);
     event Vesting(uint256 indexed pid, address indexed user, uint256 amount, uint256 availableTime);
     event Withdrawn(uint256 indexed pid, address indexed user, uint256 amount);
@@ -383,6 +391,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     event RewardPaid(uint256 indexed pid, address indexed user, uint256 reward);
     event RewardDenied(uint256 indexed pid, address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 indexed pid, uint256 duration);
-    event Recovered(address token, uint256 amount);
+    event Recovered(uint256 indexed pid, address indexed token, uint256 indexed amount);
 
 }
