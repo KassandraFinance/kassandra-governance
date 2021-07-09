@@ -129,7 +129,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         } else if (block.timestamp >= user.depositTime + pool.lockPeriod + pool.vestingPeriod) {
             return user.amount;
         } else {
-            return (user.amount - user.rewardsDebt) * (block.timestamp)/(user.depositTime + pool.lockPeriod + pool.vestingPeriod);
+            return user.amount * (block.timestamp -  user.lastWithdraw)/(user.depositTime + pool.lockPeriod + pool.vestingPeriod);
         }
     }
 
@@ -220,7 +220,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
             pool.depositedAmount = pool.depositedAmount - amount;
             user.amount = user.amount - amount;
-            user.rewardsDebt = user.rewardsDebt - amount;
+            user.lastWithdraw = block.timestamp;
             stakingToken.safeTransfer(msg.sender, amount);
             emit Withdrawn(pid, msg.sender, amount);
 

@@ -17,7 +17,7 @@ contract StakingStorage {
         uint256 pendingRewards;
         uint256 rewardPerTokenPaid;
         uint256 withdrawRequestTime;
-        uint256 rewardsDebt;
+        uint256 lastWithdraw;
         address delegatee;
     }
 
