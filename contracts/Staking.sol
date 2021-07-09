@@ -91,7 +91,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     function lockUntil(uint256 pid, address account) public view poolInteraction(pid) returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][account];
-        require(user.withdrawRequestTime == 0 && pool.withdrawDelay != 0, "Staking::lockUntil: tokens indefinitely locked, request withdraw to start the delay");
+        require(user.withdrawRequestTime != 0 || pool.withdrawDelay == 0, "Staking::lockUntil: tokens indefinitely locked, request withdraw to start the delay");
         return max(user.withdrawRequestTime + pool.withdrawDelay, user.depositTime + pool.lockPeriod);
     }
 
