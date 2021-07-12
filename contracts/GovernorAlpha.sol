@@ -6,31 +6,96 @@ contract GovernorAlpha {
     /// @notice The name of this contract
     string public constant name = "Kassandra Governor Alpha";
 
+    uint private _quorum = 25; // 4% of total voting power
+    uint private _proposer = 100; // 1% of total voting power
+    /// @notice The duration of voting on a proposal, in blocks
+    uint public votingPeriod = 40_320; // ~7 days in blocks (assuming 15s blocks)
+    /// @notice The delay, in blocks, before voting on a proposal may take place, once proposed
+    uint public votingDelay = 1;
+
+    /**
+     * @notice The admin of this contract is the timelock that is owned by this contract, thus
+     *         this contract can be modified by itself through the timelock that it controls
+     */
+    modifier onlyOwner() {
+        require(address(timelock) == msg.sender, "ERR_NOT_CONTROLLER");
+        _;
+    }
+
+    /**
+     * @notice Change the required amount of votes for a proposal to be accepted
+     *
+     * @dev This is the divisor of the total amount of votes, so 4% requires this to be 25
+     *
+     * @param divisor - divisor of total amount of votes
+     */
+    function setQuorum(uint divisor) external onlyOwner {
+        require(divisor > 0, "ERR_INVALID_QUORUM");
+        _quorum = divisor;
+    }
+
+    /**
+     * @notice Change the required amount of voting power required to make a proposal
+     *
+     * @dev This is the divisor of the total amount of votes, so 4% requires this to be 25
+     *
+     * @param divisor - divisor of total amount of votes
+     */
+    function setProposer(uint divisor) external onlyOwner {
+        require(divisor > 0, "ERR_INVALID_PROPOSER");
+        _proposer = divisor;
+    }
+
+    /**
+     * @notice Change the time a proposal stays in voting time in blocks
+     *
+     * @param period - Time voting stays open in blocks
+     */
+    function setVotingPeriod(uint period) external onlyOwner {
+        votingPeriod = period;
+    }
+
+    /**
+     * @notice Change the delay, in blocks, before voting on a proposal may take place, once proposed
+     *
+     * @param period - Time proposal will stay stale before voting starts in blocks
+     */
+    function setVotingDelay(uint period) external onlyOwner {
+        votingDelay = period;
+    }
+
+    /**
+     * @notice Change the contract that holds the voting power logic
+     *
+     * @param contractAddr - Address of new contract
+     */
+    function setStakingPools(address contractAddr) external onlyOwner {
+        kassandra = IStaking(contractAddr);
+    }
+
+    /**
+     * @notice Change the contract that holds the proposals for execution
+     *
+     * @param contractAddr - Address of new contract
+     */
+    function setTimelock(address contractAddr) external onlyOwner {
+        timelock = TimelockInterface(contractAddr);
+    }
 
     // ====== REVISITAR ====== ///
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
     function quorumVotes() public view returns (uint) {
-        // 4% of total voting power
-        uint256 quorum = kassandra.getTotalVotes() / 25;
-        return quorum; 
+        return kassandra.getTotalVotes() / _quorum;
     } 
 
     /// @notice The number of votes required in order for a voter to become a proposer
     function proposalThreshold() public view returns (uint) {
-        // 1% of total voting power
-        uint256 threshold = kassandra.getTotalVotes() / 100;
-        return threshold; 
+        return kassandra.getTotalVotes() / _proposer;
     }
     // ====== ========= ====== ///
 
     /// @notice The maximum number of actions that can be included in a proposal
     function proposalMaxOperations() public pure returns (uint) { return 10; } // 10 actions
-
-    /// @notice The delay before voting on a proposal may take place, once proposed
-    function votingDelay() public pure returns (uint) { return 1; } // 1 block
-
-    /// @notice The duration of voting on a proposal, in blocks
-    function votingPeriod() public pure returns (uint) { return 40_320; } // ~7 days in blocks (assuming 15s blocks)
 
     /// @notice The address of the Kassandra Protocol Timelock
     TimelockInterface public timelock;
@@ -139,8 +204,8 @@ contract GovernorAlpha {
             require(proposersLatestProposalState != ProposalState.Pending, "GovernorAlpha::propose: one live proposal per proposer, found an already pending proposal");
         }
 
-        uint startBlock = block.number + votingDelay();
-        uint endBlock = startBlock + votingPeriod();
+        uint startBlock = block.number + votingDelay;
+        uint endBlock = startBlock + votingPeriod;
 
         proposalCount++;
         Proposal storage newProposal = proposals[proposalCount];
