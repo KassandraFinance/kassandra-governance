@@ -15,26 +15,18 @@
     "build"
   ],
   "scripts": {
-    "precompile": "rimraf ./build/",
-    "compile": "waffle",
-    "pretest": "yarn compile",
-    "test": "mocha",
+    "compile": "hardhat compile",
     "lint": "prettier ./test/**/*.ts --check",
-    "prepublishOnly": "yarn test"
+    "test": "hardhat test"
   },
   "devDependencies": {
-    "@types/chai": "^4.2.12",
-    "@types/mocha": "^8.0.3",
-    "@uniswap/v2-core": "^1.0.1",
-    "chai": "^4.2.0",
-    "ethereum-waffle": "^3.1.0",
-    "ethereumjs-util": "^7.0.4",
-    "mocha": "^8.1.3",
-    "prettier": "^2.1.1",
-    "rimraf": "^3.0.2",
-    "solc": "^0.8.4",
-    "ts-node": "^10.0.0",
-    "typescript": "^4.0.2"
+    "@nomiclabs/hardhat-ethers": "^2.0.2",
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "chai": "^4.3.4",
+    "ethereum-waffle": "^3.4.0",
+    "ethers": "^5.4.1",
+    "hardhat": "^2.4.3",
+    "solhint": "^3.3.6"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.2.0"
