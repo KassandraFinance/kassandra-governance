@@ -142,7 +142,7 @@ contract StakingGov is StakingStorage {
 
         uint256 delegatorVotes;
 
-        if (user.withdrawRequestTime == 0) {
+        if (user.unstakeRequestTime == 0) {
             delegatorVotes = user.amount * pool.votingMultiplier;
         } else {
             delegatorVotes = user.amount;

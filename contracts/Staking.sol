@@ -18,7 +18,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param pid The pool id to get the deposited amount from
      * @return Deposited amount in the pool
      */
-    function depositedAmount(uint256 pid) public view poolInteraction(pid) returns (uint256) {
+    function depositedAmount(uint256 pid) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         return pool.depositedAmount;
     }
@@ -29,17 +29,17 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param account The address to get the balance
      * @return Deposited amount in the pool `pid` by `account`
      */
-    function balanceOf(uint256 pid, address account) public view poolInteraction(pid) returns (uint256) {
+    function balanceOf(uint256 pid, address account) public view returns (uint256) {
         return userInfo[pid][account].amount;
     }
 
     /**
-     * @notice Gets the last time that the pool `pid` was last updated
-     * @dev The `lastUpdateTime` param is usually updated by the modifier `updateReward`
+     * @notice Gets the last time that the pool `pid` was giving rewards
+     * @dev Stops increasing when `pool.rewardsDuration` ends
      * @param pid The pool id to get the time from
      * @return The timestamp of whether the pool was last updated
      */
-    function lastTimeRewardApplicable(uint pid) public view poolInteraction(pid) returns (uint256) {
+    function lastTimeRewardApplicable(uint pid) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         return min(block.timestamp, pool.periodFinish);
     }
@@ -49,10 +49,12 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param pid The pool id to get the reward per token from
      * @return The reward rate per token for the pool `pid`
      */
-    function rewardPerToken(uint pid) public view poolInteraction(pid) returns (uint256) {
+    function rewardPerToken(uint pid) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         if (pool.depositedAmount == 0) {
             return pool.rewardPerTokenStored;
+        } else if (pool.lastUpdateTime > lastTimeRewardApplicable(pid)) {
+            return 0;
         }
         return
             pool.rewardPerTokenStored + (
@@ -66,7 +68,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param account The address to get the rewards earned from
      * @return The claimable rewards for `account` in the pool `pid`
      */
-    function earned(uint256 pid, address account) public view poolInteraction(pid) returns (uint256) {
+    function earned(uint256 pid, address account) public view returns (uint256) {
         UserInfo storage user = userInfo[pid][account];
         return user.amount * (rewardPerToken(pid) - user.rewardPerTokenPaid) / 1e18  + user.pendingRewards;
     }
@@ -83,16 +85,81 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     /**
      * @notice Gets the timestamp that the tokens will be locked until
-     * @dev If the pool have a withdrawal Delay, to the lock until timestamp be known it's needed that the user have already made a withdrawal request
+     * @dev This doesnt take withdrawal delay into account
      * @param pid The pool id to get the timestamp from
      * @param account The address to get the timestamp from
      * @return The lock timestamp of `account` in the pool `pid`
      */
-    function lockUntil(uint256 pid, address account) public view poolInteraction(pid) returns (uint256) {
+    function lockUntil(uint256 pid, address account) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][account];
-        require(user.withdrawRequestTime != 0 || pool.withdrawDelay == 0, "Staking::lockUntil: tokens indefinitely locked, request withdraw to start the delay");
-        return max(user.withdrawRequestTime + pool.withdrawDelay, user.depositTime + pool.lockPeriod);
+        return user.depositTime + pool.lockPeriod;
+    }
+
+    /**
+     * @notice Gets wether the `account` is locked by the pool locking period
+     * @dev This doesnt take withdrawal delay into account
+     * @param pid The pool id to check
+     * @param account The address to check
+     * @return A boolean of wheter the `account` is locked or not in pool `pid`
+     */
+    function locked(uint256 pid, address account) public view returns (bool) {
+        return (block.timestamp < lockUntil(pid, account));
+    }
+
+    /**
+     * @notice Gets the timestamp that the withdrawal delay ends
+     * @dev For pools with withdrawal delay the returned value keep incresing until unstake requested
+     * @param pid The pool id to check
+     * @param account The address to check
+     * @return The staked timestamp of `account` in the pool `pid`
+     */
+    function stakedUntil(uint256 pid, address account) public view returns (uint256) {
+        PoolInfo storage pool = poolInfo[pid];
+        UserInfo storage user = userInfo[pid][account];
+        uint256 delayedTime; 
+        if (pool.withdrawDelay == 0) {
+            // If no withdrawDelay
+            delayedTime = 0;
+        } else if (user.unstakeRequestTime == 0) {
+            // If withdrawDelay and no withdraw request
+            delayedTime = block.timestamp + pool.withdrawDelay;
+        } else {
+            // If withdrawDelay and already requested withdraw a previous time
+            delayedTime = user.unstakeRequestTime + pool.withdrawDelay;
+        }
+        return delayedTime;
+    }
+
+    /**
+     * @notice Gets wether the `account` needs to be unstacked to be withdrawable
+     * @dev Checks if the pool has withdrawal delay and unstake hasnt been requested yet
+     * @param pid The pool id to check
+     * @param account The address to check
+     * @return A boolean of wheter unstake needs to be called
+     */
+    function needUnstake(uint256 pid, address account) public view returns (bool) {
+        PoolInfo storage pool = poolInfo[pid];
+        UserInfo storage user = userInfo[pid][account];
+        return (pool.withdrawDelay != 0 && user.unstakeRequestTime == 0);
+    }
+
+    /**
+     * @notice Gets when the `account` has a running withdrawal delay
+     * @dev Returns false for pools that withdrawal delay has ended
+     * @param pid The pool id to check
+     * @param account The address to check
+     * @return A boolean of wheter the `account` is unstaking `pid`
+     */
+    function unstaking(uint256 pid, address account) public view returns (bool) {
+        PoolInfo storage pool = poolInfo[pid];
+        if (pool.withdrawDelay == 0) {
+            return false;
+        } else if (needUnstake(pid, account)) {
+            return false;
+        } else {
+            return (block.timestamp < stakedUntil(pid, account));
+        }
     }
 
     /**
@@ -102,15 +169,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param account The address to check
      * @return A boolean of wheter the `account` can withdraw from pool `pid`
      */
-    function withdrawable(uint256 pid, address account) public view poolInteraction(pid) returns (bool) {
+    function withdrawable(uint256 pid, address account) public view returns (bool) {
         PoolInfo storage pool = poolInfo[pid];
-        UserInfo storage user = userInfo[pid][account];
         if (pool.withdrawDelay == 0 && pool.lockPeriod == 0) {
             return true;
-        } else if (pool.withdrawDelay != 0 && user.withdrawRequestTime == 0) {
+        } else if (needUnstake(pid, account)) {
             return false;
         } else {
-            return (block.timestamp > lockUntil(pid, account));
+            return (!locked(pid, account) && !unstaking(pid, account));
         }
     }
 
@@ -121,7 +187,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param account The address to get the timestamp from
      * @return The available withdrawable amount for `account` in the pool `pid`
      */
-    function availableWithdraw(uint256 pid, address account) public view poolInteraction(pid) returns (uint256) {
+    function availableWithdraw(uint256 pid, address account) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][account];
         if (!withdrawable(pid, account)) {
@@ -129,7 +195,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         } else if (block.timestamp >= user.depositTime + pool.lockPeriod + pool.vestingPeriod) {
             return user.amount;
         } else {
-            return user.amount * (block.timestamp -  user.lastWithdraw)/(user.depositTime + pool.lockPeriod + pool.vestingPeriod);
+            return user.amount * (block.timestamp - user.depositTime)/(pool.lockPeriod + pool.vestingPeriod) - user.withdrawn;
         }
     }
 
@@ -170,9 +236,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         UserInfo storage user = userInfo[pid][stakeFor];
         IERC20 stakingToken = IERC20(pool.stakingToken);
 
+        if (stakeFor != msg.sender) {
+            // Avoid third parties to reset stake vestings
+            require(user.amount == 0, "Staking::stake: cannot stake for a different address that already is staking");
+        }
+
         //  Reset withdrawDelay due to new stake
-        if (pool.withdrawDelay != 0 && user.withdrawRequestTime != 0){
-            user.withdrawRequestTime = 0;
+        if (pool.withdrawDelay != 0 && user.unstakeRequestTime != 0){
+            user.unstakeRequestTime = 0;
             _undelayVotingPower(pid, stakeFor);
         }
 
@@ -188,7 +259,9 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         // Update stake parms
         pool.depositedAmount = pool.depositedAmount + amount;
         user.amount = user.amount + amount;
+        // Beware, depositing in a pool with running vesting resets it
         user.depositTime = block.timestamp;
+        user.withdrawn = 0;
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // Increase voting power of new delegatee
@@ -199,42 +272,46 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     }
 
 	/**
-	 * @notice Withdraw tokens according to the delay, lock and vesting schedules
+	 * @notice Unstake tokens to start the withdrawal delay
+     * @dev Only needed for pools with withdrawal delay
+     * @param pid Pool id to be withdrawn from
+	 * */
+    function unstake(uint256 pid) public nonReentrant updateReward(pid, msg.sender) {
+        require(needUnstake(pid, msg.sender), "Staking::withdraw: already unstaked");
+        require(!locked(pid, msg.sender), "Staking::withdraw: tokens are locked");
+
+        UserInfo storage user = userInfo[pid][msg.sender];
+
+        if (needUnstake(pid, msg.sender)) {
+            _delayVotingPower(pid, user.delegatee);
+            user.unstakeRequestTime = block.timestamp;
+            emit Unstaking(pid, msg.sender, stakedUntil(pid, msg.sender));
+        }
+    }
+
+	/**
+	 * @notice Withdraw tokens from pool according to the delay, lock and vesting schedules
      * @param pid Pool id to be withdrawn from
 	 * @param amount The amount of tokens to be withdrawn
 	 * */
     function withdraw(uint256 pid, uint256 amount) public nonReentrant updateReward(pid, msg.sender) {
+        require(amount > 0, "Staking::withdraw: cannot withdraw 0");
+        require(amount <= availableWithdraw(pid, msg.sender), "Staking::withdraw: cannot withdraw more than available");
+ 
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][msg.sender];
 
-        require(block.timestamp >= (user.depositTime + pool.lockPeriod), 'Staking::withdraw: tokens locked');
-        require(amount <= availableWithdraw(pid, msg.sender), "Staking::withdraw: cannot withdraw more than available");
-        require(amount > 0, "Staking::withdraw: cannot withdraw 0");
+        // Remove voting power
+        uint256 votingPower = user.unstakeRequestTime == 0 ? amount * pool.votingMultiplier : amount;
+        _decreaseVotingPower(user.delegatee, votingPower);
+        IERC20 stakingToken = IERC20(pool.stakingToken);
 
-        //  If withdrawable: withdraw
-        if (withdrawable(pid, msg.sender)) {
-            // Remove voting power
-            uint256 votingPower = user.withdrawRequestTime == 0 ? amount * pool.votingMultiplier : amount;
-            _decreaseVotingPower(user.delegatee, votingPower);
-            IERC20 stakingToken = IERC20(pool.stakingToken);
-
-            pool.depositedAmount = pool.depositedAmount - amount;
-            user.amount = user.amount - amount;
-            user.lastWithdraw = block.timestamp;
-            stakingToken.safeTransfer(msg.sender, amount);
-            emit Withdrawn(pid, msg.sender, amount);
-
-        // If pool with `withdrawDelay` and it's the first withdraw request: start withdrawal delay
-        } else if (user.withdrawRequestTime == 0 && pool.withdrawDelay != 0) { 
-            _delayVotingPower(pid, user.delegatee);
-            // Setting `withdrawRequestTime` to different than zero starts the withdrawal delay
-            user.withdrawRequestTime = block.timestamp;
-            emit Vesting(pid, msg.sender, amount, lockUntil(pid, msg.sender));
-
-        // Only gets here during `lockPeriod` or running `withdrawDelay`: tokens are locked
-        } else {
-            emit WithdrawDenied(pid, msg.sender, amount, lockUntil(pid, msg.sender));
-        }
+        // Update stake parms
+        pool.depositedAmount = pool.depositedAmount - amount;
+        user.amount = user.amount - amount;
+        user.withdrawn = user.withdrawn + amount;
+        stakingToken.safeTransfer(msg.sender, amount);
+        emit Withdrawn(pid, msg.sender, amount);
     }
 
 	/**
@@ -248,8 +325,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
             user.pendingRewards = 0;
             kacy.safeTransfer(msg.sender, reward);
             emit RewardPaid(pid, msg.sender, reward);
-        } else {
-            emit RewardDenied(pid, msg.sender, reward);
         }
     }
 
@@ -265,7 +340,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     /**
      * @notice Delegate all votes from `msg.sender` to `delegatee`
-     * @dev This is a governance function, but it is defined here because it dependes of `balanceOf`
+     * @dev This is a governance function, but it is defined here because it depends on `balanceOf`
      * @param delegatee The address to delegate votes to
      */
     function delegateAll(address delegatee) public {
@@ -304,7 +379,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /// @dev Add rewards to the pool
     function addReward(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
         PoolInfo storage pool = poolInfo[pid];
-        require(pool.rewardsDuration > 0, "Staking::addReward: rewardDuration must be greater than zero");
+        require(pool.rewardsDuration > 0, "Staking::addReward: rewardsDuration must be greater than zero");
 
         kacy.safeTransferFrom(msg.sender, address(this), reward);
 
@@ -374,22 +449,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         _;
     }
 
-    /// @dev Modifier to unsure staking has started
-    modifier poolInteraction(uint pid) {
-        require(poolInfo[pid].lastUpdateTime > 0 && block.timestamp >= poolInfo[pid].lastUpdateTime, 'Staking::poolInteraction: staking not started yet');
-        _;
-    }
-
     /* ========== EVENTS ========== */
 
     event NewPool(uint256 indexed pid);
     event RewardAdded(uint256 indexed pid, uint256 indexed reward);
     event Staked(uint256 indexed pid, address indexed user, uint256 amount);
-    event Vesting(uint256 indexed pid, address indexed user, uint256 amount, uint256 availableTime);
+    event Unstaking(uint256 indexed pid, address indexed user,uint256 availableAt);
     event Withdrawn(uint256 indexed pid, address indexed user, uint256 amount);
-    event WithdrawDenied(uint256 indexed pid, address indexed user, uint256 amount, uint256 availableTime);
     event RewardPaid(uint256 indexed pid, address indexed user, uint256 reward);
-    event RewardDenied(uint256 indexed pid, address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 indexed pid, uint256 duration);
     event Recovered(uint256 indexed pid, address indexed token, uint256 indexed amount);
 

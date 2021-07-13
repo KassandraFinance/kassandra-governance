@@ -10,14 +10,14 @@ contract StakingStorage {
     IERC20 public kacy;
 
     /// @dev Struct to store user data for each pool
-    /// @dev `withdrawRequestTime` only with be set to different than zero during withdrawal delays (if the pool have one)
+    /// @dev `unstakeRequestTime` only with be set to different than zero during withdrawal delays (if the pool have one)
     struct UserInfo {
         uint256 amount;
         uint256 depositTime;
         uint256 pendingRewards;
         uint256 rewardPerTokenPaid;
-        uint256 withdrawRequestTime;
-        uint256 lastWithdraw;
+        uint256 unstakeRequestTime;
+        uint256 withdrawn;
         address delegatee;
     }
 
