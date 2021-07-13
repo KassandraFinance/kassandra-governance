@@ -33,7 +33,7 @@ contract StakingGov is StakingStorage {
      * @return The number of votes the account had as of the given block
      */
     function getPriorVotes(address account, uint blockNumber) public view returns (uint256) {
-        require(blockNumber < block.number, "StakingGov::getPriorVotes: not yet determined");
+        require(blockNumber < block.number, "ERR_VOTES_NOT_YET_DETERMINED");
 
         uint32 nCheckpoints = numCheckpoints[account];
         if (nCheckpoints == 0) {
@@ -87,13 +87,13 @@ contract StakingGov is StakingStorage {
      * @param s Half of the ECDSA signature pair
      */
     function delegateBySig(uint256 pid, address delegatee, uint nonce, uint expiry, uint8 v, bytes32 r, bytes32 s) public {
-        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), getChainId(), address(this)));
+        bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_TYPEHASH, keccak256(bytes(name)), _getChainId(), address(this)));
         bytes32 structHash = keccak256(abi.encode(DELEGATION_TYPEHASH, delegatee, nonce, expiry));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         address signatory = ecrecover(digest, v, r, s);
-        require(signatory != address(0), "StakingGov::delegateBySig: invalid signature");
-        require(nonce == nonces[signatory]++, "StakingGov::delegateBySig: invalid nonce");
-        require(block.timestamp <= expiry, "StakingGov::delegateBySig: signature expired");
+        require(signatory != address(0), "ERR_INVALID_SIGNATURE");
+        require(nonce == nonces[signatory]++, "ERR_INVALID_NONCE");
+        require(block.timestamp <= expiry, "ERR_SIGNATURE_EXPIRED");
         return _delegate(pid, signatory, delegatee);
     }
 
@@ -168,7 +168,7 @@ contract StakingGov is StakingStorage {
     }
 
     function _writeCheckpoint(address delegatee, uint32 nCheckpoints, uint256 oldVotes, uint256 newVotes) internal {
-      uint32 blockNumber = safe32(block.number, "StakingGov::_writeCheckpoint: block number exceeds 32 bits");
+      uint32 blockNumber = _safe32(block.number, "StakingGov::_writeCheckpoint: block number exceeds 32 bits");
 
       if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == blockNumber) {
           checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
@@ -182,12 +182,12 @@ contract StakingGov is StakingStorage {
 
     /* ========== PURES ========== */
 
-    function safe32(uint n, string memory errorMessage) internal pure returns (uint32) {
+    function _safe32(uint n, string memory errorMessage) internal pure returns (uint32) {
         require(n < 2**32, errorMessage);
         return uint32(n);
     }
 
-    function getChainId() internal view returns (uint) {
+    function _getChainId() internal view returns (uint) {
         uint256 chainId;
         assembly { chainId := chainid() }
         return chainId;

@@ -18,9 +18,19 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @param pid The pool id to get the deposited amount from
      * @return Deposited amount in the pool
      */
-    function depositedAmount(uint256 pid) public view returns (uint256) {
+    function depositedAmount(uint256 pid) external view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
         return pool.depositedAmount;
+    }
+
+    /**
+     * @notice Gets how much rewards will be distributed through the pool `pid` during the whole distribution period
+     * @param pid The pool id to get the rewards from
+     * @return The amount that the pool `pid` will distribute
+     */
+    function getRewardForDuration(uint256 pid) external view returns (uint256) {
+        PoolInfo storage pool = poolInfo[pid];
+        return pool.rewardRate * pool.rewardsDuration;
     }
 
     /**
@@ -41,7 +51,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      */
     function lastTimeRewardApplicable(uint pid) public view returns (uint256) {
         PoolInfo storage pool = poolInfo[pid];
-        return min(block.timestamp, pool.periodFinish);
+        return _min(block.timestamp, pool.periodFinish);
     }
 
     /**
@@ -71,16 +81,6 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     function earned(uint256 pid, address account) public view returns (uint256) {
         UserInfo storage user = userInfo[pid][account];
         return user.amount * (rewardPerToken(pid) - user.rewardPerTokenPaid) / 1e18  + user.pendingRewards;
-    }
-
-    /**
-     * @notice Gets how much rewards will be distributed through the pool `pid` during the whole distribution period
-     * @param pid The pool id to get the rewards from
-     * @return The amount that the pool `pid` will distribute
-     */
-    function getRewardForDuration(uint256 pid) external view returns (uint256) {
-        PoolInfo storage pool = poolInfo[pid];
-        return pool.rewardRate * pool.rewardsDuration;
     }
 
     /**
@@ -182,7 +182,8 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     /**
      * @notice Gets the available withdrawable amount for `account` in the pool `pid`
-     * @dev If not withdawable return 0, if lock and vesting period ended return the full amount, else linear release by the vesting period
+     * @dev If not withdawable return 0, if lock and vesting period ended return the full amount,
+     * else linear release by the vesting period
      * @param pid The pool id to get the timestamp from
      * @param account The address to get the timestamp from
      * @return The available withdrawable amount for `account` in the pool `pid`
@@ -195,42 +196,40 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         } else if (block.timestamp >= user.depositTime + pool.lockPeriod + pool.vestingPeriod) {
             return user.amount;
         } else {
-            return user.amount * (block.timestamp - user.depositTime)/(pool.lockPeriod + pool.vestingPeriod) - user.withdrawn;
+            return user.amount * (
+                block.timestamp - user.depositTime)/(pool.lockPeriod + pool.vestingPeriod
+            ) - user.withdrawn;
         }
-    }
-
-    /* ========== PURE FUNCTIONS ========== */
-
-    function max(uint a, uint b) private pure returns (uint) {
-        return a > b ? a : b;
-    }
-
-    function min(uint a, uint b) private pure returns (uint) {
-        return a < b ? a : b;
     }
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
-	/**
-	 * @notice Stake tokens to the pool `pid`
+    /**
+     * @notice Stake tokens to the pool `pid`
      * @dev `StakeFor` and `delegatee` can be passed as `address(0)` and the `stake` will work in a sensible way
      * @param pid Pool id to be staked in
-	 * @param amount The amount of tokens to stake
-	 * @param stakeFor The address to stake the tokens for or 0x0 if staking for oneself
-	 * @param delegatee The address of the delegatee or 0x0 if there is none
-	 * */
-    function stake(uint256 pid, uint256 amount, address stakeFor, address delegatee) external nonReentrant whenNotPaused updateReward(pid, msg.sender) {
-        require(amount > 0, "Staking::stake: cannot stake 0");
+     * @param amount The amount of tokens to stake
+     * @param stakeFor The address to stake the tokens for or 0x0 if staking for oneself
+     * @param delegatee The address of the delegatee or 0x0 if there is none
+     */
+    function stake(
+        uint256 pid,
+        uint256 amount,
+        address stakeFor,
+        address delegatee
+        ) external nonReentrant whenNotPaused updateReward(pid, msg.sender)
+    {
+        require(amount > 0, "ERR_CAN_NOT_STAKE_ZERO");
 
-		// Stake for the sender if not specified otherwise.
-		if (stakeFor == address(0)) {
-			stakeFor = msg.sender;
-		}
+        // Stake for the sender if not specified otherwise.
+        if (stakeFor == address(0)) {
+            stakeFor = msg.sender;
+        }
 
-		// Delegate for stakeFor if not specified otherwise.
-		if (delegatee == address(0)) {
-			delegatee = stakeFor;
-		}
+        // Delegate for stakeFor if not specified otherwise.
+        if (delegatee == address(0)) {
+            delegatee = stakeFor;
+        }
 
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][stakeFor];
@@ -238,7 +237,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         if (stakeFor != msg.sender) {
             // Avoid third parties to reset stake vestings
-            require(user.amount == 0, "Staking::stake: cannot stake for a different address that already is staking");
+            require(user.amount == 0, "ERR_STAKE_FOR_LIVE_USER");
         }
 
         //  Reset withdrawDelay due to new stake
@@ -248,13 +247,13 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         }
 
         // Decrease voting power of previous delegatee
-		address previousDelegatee = user.delegatee;
-		if (previousDelegatee != delegatee) {
+        address previousDelegatee = user.delegatee;
+        if (previousDelegatee != delegatee) {
             uint256 previousVotingPower = user.amount * pool.votingMultiplier;
-			_decreaseVotingPower(previousDelegatee, previousVotingPower);
-			// Update delegatee.
-			user.delegatee = delegatee;
-		}
+            _decreaseVotingPower(previousDelegatee, previousVotingPower);
+            // Update delegatee.
+            user.delegatee = delegatee;
+        }
 
         // Update stake parms
         pool.depositedAmount = pool.depositedAmount + amount;
@@ -271,14 +270,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         emit Staked(pid, stakeFor, amount);
     }
 
-	/**
-	 * @notice Unstake tokens to start the withdrawal delay
+    /**
+     * @notice Unstake tokens to start the withdrawal delay
      * @dev Only needed for pools with withdrawal delay
      * @param pid Pool id to be withdrawn from
-	 * */
-    function unstake(uint256 pid) public nonReentrant updateReward(pid, msg.sender) {
-        require(needUnstake(pid, msg.sender), "Staking::withdraw: already unstaked");
-        require(!locked(pid, msg.sender), "Staking::withdraw: tokens are locked");
+     */
+    function unstake(uint256 pid) external nonReentrant updateReward(pid, msg.sender) {
+        require(needUnstake(pid, msg.sender), "ERR_ALREADY_UNSTAKED");
+        require(!locked(pid, msg.sender), "ERR_TOKENS_LOCKED");
 
         UserInfo storage user = userInfo[pid][msg.sender];
 
@@ -289,14 +288,14 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         }
     }
 
-	/**
-	 * @notice Withdraw tokens from pool according to the delay, lock and vesting schedules
+    /**
+     * @notice Withdraw tokens from pool according to the delay, lock and vesting schedules
      * @param pid Pool id to be withdrawn from
-	 * @param amount The amount of tokens to be withdrawn
-	 * */
+     * @param amount The amount of tokens to be withdrawn
+     */
     function withdraw(uint256 pid, uint256 amount) public nonReentrant updateReward(pid, msg.sender) {
-        require(amount > 0, "Staking::withdraw: cannot withdraw 0");
-        require(amount <= availableWithdraw(pid, msg.sender), "Staking::withdraw: cannot withdraw more than available");
+        require(amount > 0, "ERR_CAN_NOT_WTIHDRAW_ZERO");
+        require(amount <= availableWithdraw(pid, msg.sender), "ERR_WITHDRAW_MORE_THAN_AVAILABLE");
  
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][msg.sender];
@@ -314,10 +313,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         emit Withdrawn(pid, msg.sender, amount);
     }
 
-	/**
-	 * @notice Claim the earned rewards for the transaction sender in the pool `pid`
+    /**
+     * @notice Claim the earned rewards for the transaction sender in the pool `pid`
      * @param pid Pool id to get the rewards from
-	 * */
+     */
     function getReward(uint256 pid) public nonReentrant updateReward(pid, msg.sender) {
         UserInfo storage user = userInfo[pid][msg.sender];
         uint256 reward = user.pendingRewards;
@@ -328,10 +327,10 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         }
     }
 
-	/**
-	 * @notice Withdraw fund and claim the earned rewards for the transaction sender in the pool `pid`
+    /**
+     * @notice Withdraw fund and claim the earned rewards for the transaction sender in the pool `pid`
      * @param pid Pool id to get the rewards from
-	 * */
+     */
     function exit(uint256 pid) external {
         UserInfo storage user = userInfo[pid][msg.sender];
         withdraw(pid, user.amount);
@@ -343,7 +342,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
      * @dev This is a governance function, but it is defined here because it depends on `balanceOf`
      * @param delegatee The address to delegate votes to
      */
-    function delegateAll(address delegatee) public {
+    function delegateAll(address delegatee) external {
         for (uint256 pid; pid <= poolInfo.length; pid++){
             if (balanceOf(pid, msg.sender) > 0){
                 UserInfo storage user = userInfo[pid][msg.sender];
@@ -357,7 +356,15 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /* ========== RESTRICTED FUNCTIONS ========== */
 
     /// @dev Add new staking pool
-      function addPool(address _stakingToken, uint256 _rewardsDuration, uint256 _lockPeriod, uint256 _withdrawDelay, uint256 _vestingPeriod, uint256 _votingMultiplier) external onlyOwner {
+    function addPool(
+        address _stakingToken,
+        uint256 _rewardsDuration,
+        uint256 _lockPeriod,
+        uint256 _withdrawDelay,
+        uint256 _vestingPeriod,
+        uint256 _votingMultiplier
+        ) external onlyOwner
+    {
         poolInfo.push(
             PoolInfo({
                 stakingToken: _stakingToken,
@@ -379,7 +386,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /// @dev Add rewards to the pool
     function addReward(uint256 pid, uint256 reward) external onlyOwner updateReward(pid, address(0)) {
         PoolInfo storage pool = poolInfo[pid];
-        require(pool.rewardsDuration > 0, "Staking::addReward: rewardsDuration must be greater than zero");
+        require(pool.rewardsDuration > 0, "ERR_REWARD_DURATION_ZERO");
 
         kacy.safeTransferFrom(msg.sender, address(this), reward);
 
@@ -405,7 +412,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /// @dev Recover tokens from pool
     function recoverERC20(uint256 pid, address tokenAddress, uint256 tokenAmount) external onlyOwner {
         PoolInfo storage pool = poolInfo[pid];
-        require(tokenAddress != address(pool.stakingToken), "Cannot withdraw the staking token");
+        require(tokenAddress != address(pool.stakingToken), "ERR_RECOVER_STAKING_TOKEN");
         address owner = owner();
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
         emit Recovered(pid, tokenAddress, tokenAmount);
@@ -414,10 +421,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     /// @dev Set new rewards distribution duration
     function setRewardsDuration(uint256 pid, uint256 _rewardsDuration) external onlyOwner {
         PoolInfo storage pool = poolInfo[pid];
-        require(
-            block.timestamp > pool.periodFinish,
-            "Staking::setRewardsDuration: previous rewards period must be complete before changing the duration for the new period"
-        );
+        require(block.timestamp > pool.periodFinish, "ERR_RUNNING_REWARDS");
         pool.rewardsDuration = _rewardsDuration;
         emit RewardsDurationUpdated(pid, pool.rewardsDuration);
     }
@@ -447,6 +451,16 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
             user.rewardPerTokenPaid = pool.rewardPerTokenStored;
         }
         _;
+    }
+
+    /* ========== PURE FUNCTIONS ========== */
+
+    function _max(uint a, uint b) private pure returns (uint) {
+        return a > b ? a : b;
+    }
+
+    function _min(uint a, uint b) private pure returns (uint) {
+        return a < b ? a : b;
     }
 
     /* ========== EVENTS ========== */

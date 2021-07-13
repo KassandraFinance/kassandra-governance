@@ -5,12 +5,10 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract StakingStorage {
 
-    string public constant name = "Kassandra Staking";
-
-    IERC20 public kacy;
-
-    /// @dev Struct to store user data for each pool
-    /// @dev `unstakeRequestTime` only with be set to different than zero during withdrawal delays (if the pool have one)
+    /**
+     * @dev Struct to store user data for each pool
+     * @dev `unstakeRequestTime` only with be set to different than zero during withdrawal delays (if the pool have one)
+     */
     struct UserInfo {
         uint256 amount;
         uint256 depositTime;
@@ -21,10 +19,12 @@ contract StakingStorage {
         address delegatee;
     }
 
-    /// @dev Struct to store pool params
-    /// @dev `lockPeriod` is a fixed timestamp that need to be achieved to user deposit amount be withdrawable
-    /// @dev `withdrawDelay` is a time locking period that starts after the user makes a withdraw request, after it finish a new withdraw request will fullfil the withdraw
-    /// @dev `vestingPeriod` is a time period that starts after the `lockPeriod` that will linear release the withdrawable amount
+    /**
+     * @dev Struct to store pool params
+     * @dev `lockPeriod` is a fixed timestamp that need to be achieved to user deposit amount be withdrawable
+     * @dev `withdrawDelay` is a time locking period that starts after the user makes a withdraw request, after it finish a new withdraw request will fullfil the withdraw
+     * @dev `vestingPeriod` is a time period that starts after the `lockPeriod` that will linear release the withdrawable amount
+     */
     struct PoolInfo {
         // General data
         address stakingToken;
@@ -43,22 +43,26 @@ contract StakingStorage {
         uint256 votingMultiplier;
     }
 
+    string public constant name = "Kassandra Staking";
+
+    IERC20 public kacy;
+
     /// @dev Array of pool infos
     PoolInfo[] public poolInfo;
 
     /// @dev A map to access the user info for each account: PoolId => Address => UserInfo
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
 
-	/************************** Checkpoints ******************************/
-
-    /// @dev A aggregated record of the total voting power of all accounts
-    uint256 totalVotes;
+    /************************** Checkpoints ******************************/
 
     /// @dev A checkpoint for marking the voting power from a given block
     struct Checkpoint {
         uint32 fromBlock;
         uint256 votes;
     }
+
+    /// @dev A aggregated record of the total voting power of all accounts
+    uint256 public totalVotes;
 
     /// @dev A record of votes checkpoints for each account, by index
     mapping (address => mapping (uint32 => Checkpoint)) public checkpoints;
