@@ -428,6 +428,8 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     
     /// @dev Set the governance and reward token
     function setKacy(address _kacy) external onlyOwner {
+        bool returnValue = IERC20(_kacy).transfer(msg.sender, 0);
+        require(returnValue, "ERR_NONCONFORMING_TOKEN");
         kacy = IERC20(_kacy);
     }
 
