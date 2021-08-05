@@ -137,6 +137,7 @@ contract GovernorAlpha {
      * @param staking_ - Contract with voting power logic
      */
     constructor(address timelock_, address staking_) {
+        require(timelock_ != address(0) || staking_ != address(0), "ERR_ZERO_ADDRESS");
         timelock = TimelockInterface(timelock_);
         kassandra = IStaking(staking_);
     }
@@ -189,6 +190,7 @@ contract GovernorAlpha {
      * @param contractAddr - Address of new contract
      */
     function setStakingPools(address contractAddr) external onlyOwner {
+        require(contractAddr != address(0), "ERR_ZERO_ADDRESS");
         kassandra = IStaking(contractAddr);
     }
 
@@ -198,6 +200,7 @@ contract GovernorAlpha {
      * @param contractAddr - Address of new contract
      */
     function setTimelock(address contractAddr) external onlyOwner {
+        require(contractAddr != address(0), "ERR_ZERO_ADDRESS");
         timelock = TimelockInterface(contractAddr);
     }
 
