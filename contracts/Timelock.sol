@@ -49,6 +49,7 @@ contract Timelock {
     constructor(address admin_, uint delay_) {
         require(delay_ >= MINIMUM_DELAY, "ERR_DELAY_BELOW_MIN");
         require(delay_ <= MAXIMUM_DELAY, "ERR_DELAY_ABOVE_MAX");
+        require(admin_ != address(0), "ERR_ZERO_ADDRESS");
 
         admin = admin_;
         delay = delay_;
@@ -75,6 +76,7 @@ contract Timelock {
 
     function setPendingAdmin(address pendingAdmin_) public {
         require(msg.sender == address(this), "ERR_NOT_TIMELOCK");
+        require(pendingAdmin_ != address(0), "ERR_ZERO_ADDRESS");
         pendingAdmin = pendingAdmin_;
 
         emit NewPendingAdmin(pendingAdmin);
