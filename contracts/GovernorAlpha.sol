@@ -172,6 +172,7 @@ contract GovernorAlpha {
      * @param period - Time voting stays open in blocks
      */
     function setVotingPeriod(uint period) external onlyOwner {
+        require(period > 11_520, "ERR_MIN_TWO_DAYS");
         votingPeriod = period;
     }
 
@@ -181,6 +182,7 @@ contract GovernorAlpha {
      * @param period - Time proposal will stay stale before voting starts in blocks
      */
     function setVotingDelay(uint period) external onlyOwner {
+        require(period > 0, "ERR_MIN_ONE_BLOCK");
         votingDelay = period;
     }
 
