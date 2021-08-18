@@ -306,25 +306,25 @@ contract GovernorAlpha {
         Proposal storage proposal = proposals[proposalId];
         uint eta = block.timestamp + timelock.delay();
         for (uint i = 0; i < proposal.targets.length; i++) {
+            bytes32 expectedHash = keccak256(abi.encode(
+                proposal.targets[i],
+                proposal.values[i],
+                proposal.signatures[i],
+                proposal.calldatas[i],
+                eta
+            ));
             require(
-                !timelock.queuedTransactions(
-                    keccak256(abi.encode(
-                        proposal.targets[i],
-                        proposal.values[i],
-                        proposal.signatures[i],
-                        proposal.calldatas[i],
-                        eta
-                    ))
-                ),
+                !timelock.queuedTransactions(expectedHash),
                 "ERR_ACTION_ALREADY_QUEUED_AT_ETA"
             );
-            timelock.queueTransaction(
+            bytes32 txHash = timelock.queueTransaction(
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],
                 proposal.calldatas[i],
                 eta
             );
+            require(txHash == expectedHash, "ERR_TX_HASH_NOT_MATCHING");
         }
         proposal.eta = eta;
         emit ProposalQueued(proposalId, eta);
@@ -338,13 +338,14 @@ contract GovernorAlpha {
         Proposal storage proposal = proposals[proposalId];
         proposal.executed = true;
         for (uint i = 0; i < proposal.targets.length; i++) {
-            timelock.executeTransaction{value: proposal.values[i]}(
+            bytes memory returnData = timelock.executeTransaction{value: proposal.values[i]}(
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],
                 proposal.calldatas[i],
                 proposal.eta
             );
+            require(returnData.length > 0, "ERR_VOID_TX_DATA");
         }
         emit ProposalExecuted(proposalId);
     }
