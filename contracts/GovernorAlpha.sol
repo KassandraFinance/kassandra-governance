@@ -123,6 +123,18 @@ contract GovernorAlpha {
     /// @notice An event emitted when a proposal has been executed in the Timelock
     event ProposalExecuted(uint id);
 
+    /// @notice An event emitted when the required amount of votes for a proposal to be accepted changes
+    event NewQuorum(uint divisor);
+
+    /// @notice An event emitted when the required amount of voting power required to make a proposal changes
+    event NewProposer(uint divisor);
+
+    /// @notice An event emitted when the time a proposal stays in voting time in blocks changes
+    event NewVotingPeriod(uint period);
+
+    /// @notice An event emitted when the delay before voting on a proposal may take place changes
+    event NewVotingDelay(uint period);
+
     /**
      * @notice The admin of this contract is the timelock that is owned by this contract, thus
      *         this contract can be modified by itself through the timelock that it controls
@@ -152,6 +164,7 @@ contract GovernorAlpha {
     function setQuorum(uint divisor) external onlyOwner {
         require(divisor > 0, "ERR_INVALID_QUORUM");
         quorum = divisor;
+        emit NewQuorum(quorum);
     }
 
     /**
@@ -164,6 +177,7 @@ contract GovernorAlpha {
     function setProposer(uint divisor) external onlyOwner {
         require(divisor > 0, "ERR_INVALID_PROPOSER");
         proposerPower = divisor;
+        emit NewProposer(proposerPower);
     }
 
     /**
@@ -174,6 +188,7 @@ contract GovernorAlpha {
     function setVotingPeriod(uint period) external onlyOwner {
         require(period > 11_520, "ERR_MIN_TWO_DAYS");
         votingPeriod = period;
+        emit NewVotingPeriod(votingPeriod);
     }
 
     /**
@@ -184,6 +199,7 @@ contract GovernorAlpha {
     function setVotingDelay(uint period) external onlyOwner {
         require(period > 0, "ERR_MIN_ONE_BLOCK");
         votingDelay = period;
+        emit NewVotingDelay(votingDelay);
     }
 
     /**
