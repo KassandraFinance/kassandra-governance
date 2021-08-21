@@ -383,6 +383,15 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         uint256 _votingMultiplier
         ) external onlyOwner
     {
+        require(kacyAddress != address(0), "ERR_KACY_NOT_SET");
+
+        // Pools that gives voting power must have kacy as staking token
+        // and must have a volting multiplier higher than the base 1
+        if (_votingMultiplier != 0) {
+            require(_stakingToken == kacyAddress, "ERR_NOT_VOTING_STAKING_TOKEN");
+            require(_votingMultiplier >= 1, "ERR_LOW_VOTING_MULTIPLIER");
+        }
+
         poolInfo.push(
             PoolInfo({
                 stakingToken: _stakingToken,
@@ -449,6 +458,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         bool returnValue = IERC20(_kacy).transfer(msg.sender, 0);
         require(returnValue, "ERR_NONCONFORMING_TOKEN");
         kacy = IERC20(_kacy);
+        kacyAddress = _kacy;
     }
 
     /* ========== MODIFIERS ========== */

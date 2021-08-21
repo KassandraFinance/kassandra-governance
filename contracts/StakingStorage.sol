@@ -45,6 +45,7 @@ contract StakingStorage {
 
     string public constant name = "Kassandra Staking";
 
+    address public kacyAddress;
     IERC20 public kacy;
 
     /// @dev Array of pool infos
