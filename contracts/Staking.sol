@@ -294,6 +294,19 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
     }
 
     /**
+     * @notice Cancel unstaking to boost voting power and get rewards
+     * @param pid Pool id to cancel unstake from
+     */
+    function cancelUnstake(uint256 pid) external nonReentrant updateReward(pid, msg.sender) {
+        require(unstaking(pid, msg.sender), "ERR_ALREADY_UNSTAKED");
+
+        UserInfo storage user = userInfo[pid][msg.sender];
+
+        user.unstakeRequestTime = 0;
+        _undelayVotingPower(pid, msg.sender);
+    }
+
+    /**
      * @notice Withdraw tokens from pool according to the delay, lock and vesting schedules
      * @param pid Pool id to be withdrawn from
      * @param amount The amount of tokens to be withdrawn
