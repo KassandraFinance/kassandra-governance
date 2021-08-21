@@ -248,7 +248,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         //  Reset withdrawDelay due to new stake
         if (pool.withdrawDelay != 0 && user.unstakeRequestTime != 0){
             user.unstakeRequestTime = 0;
-            _undelayVotingPower(pid, stakeFor);
+            _boostVotingPower(pid, stakeFor);
         }
 
         // Update voting power if there is a new delegatee
@@ -288,7 +288,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         UserInfo storage user = userInfo[pid][msg.sender];
 
-        _delayVotingPower(pid, msg.sender);
+        _unboostVotingPower(pid, msg.sender);
         user.unstakeRequestTime = block.timestamp;
         emit Unstaking(pid, msg.sender, stakedUntil(pid, msg.sender));
     }
@@ -303,7 +303,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         UserInfo storage user = userInfo[pid][msg.sender];
 
         user.unstakeRequestTime = 0;
-        _undelayVotingPower(pid, msg.sender);
+        _boostVotingPower(pid, msg.sender);
     }
 
     /**

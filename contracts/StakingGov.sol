@@ -151,7 +151,7 @@ contract StakingGov is StakingStorage {
         return delegatorVotes;
     }
 
-    function _delayVotingPower(uint256 pid, address delegator) internal {
+    function _unboostVotingPower(uint256 pid, address delegator) internal {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][delegator];
         address delegatee = user.delegatee;
@@ -159,7 +159,7 @@ contract StakingGov is StakingStorage {
         _decreaseVotingPower(delegatee, lostVotingPower);
     }
 
-    function _undelayVotingPower(uint256 pid, address delegator) internal {
+    function _boostVotingPower(uint256 pid, address delegator) internal {
         PoolInfo storage pool = poolInfo[pid];
         UserInfo storage user = userInfo[pid][delegator];
         address delegatee = user.delegatee;
