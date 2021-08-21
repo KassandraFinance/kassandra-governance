@@ -74,13 +74,18 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
     /**
      * @notice Gets the claimable rewards for `account` in the pool `pid`
+     * @dev Unstaking stops rewards
      * @param pid The pool id to get the rewards earned from
      * @param account The address to get the rewards earned from
      * @return The claimable rewards for `account` in the pool `pid`
      */
     function earned(uint256 pid, address account) public view returns (uint256) {
         UserInfo storage user = userInfo[pid][account];
-        return user.amount * (rewardPerToken(pid) - user.rewardPerTokenPaid) / 1e18  + user.pendingRewards;
+        if (user.unstakeRequestTime != 0) {
+            return user.pendingRewards;
+        } else {
+            return user.amount * (rewardPerToken(pid) - user.rewardPerTokenPaid) / 1e18  + user.pendingRewards;
+        }
     }
 
     /**
