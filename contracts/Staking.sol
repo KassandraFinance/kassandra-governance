@@ -288,7 +288,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
 
         UserInfo storage user = userInfo[pid][msg.sender];
 
-        _delayVotingPower(pid, user.delegatee);
+        _delayVotingPower(pid, msg.sender);
         user.unstakeRequestTime = block.timestamp;
         emit Unstaking(pid, msg.sender, stakedUntil(pid, msg.sender));
     }
