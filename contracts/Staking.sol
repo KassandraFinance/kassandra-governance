@@ -251,13 +251,15 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
             _undelayVotingPower(pid, stakeFor);
         }
 
-        // Decrease voting power of previous delegatee
+        // Update voting power if there is a new delegatee
         address previousDelegatee = user.delegatee;
         if (previousDelegatee != delegatee) {
             uint256 previousVotingPower = user.amount * pool.votingMultiplier;
             _decreaseVotingPower(previousDelegatee, previousVotingPower);
+            _increaseVotingPower(delegatee, previousVotingPower);
             // Update delegatee.
             user.delegatee = delegatee;
+
         }
 
         // Update stake parms
@@ -268,7 +270,7 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         user.withdrawn = 0;
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
-        // Increase voting power of new delegatee
+        // Increase voting power due to new stake
         uint256 newVotingPower = amount * pool.votingMultiplier;
         _increaseVotingPower(delegatee, newVotingPower);
 
