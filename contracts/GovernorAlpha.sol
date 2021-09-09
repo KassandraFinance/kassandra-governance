@@ -33,6 +33,7 @@ contract GovernorAlpha {
         uint endBlock;
         uint forVotes;
         uint againstVotes;
+        uint quorumVotes;
         bool canceled;
         bool executed;
         mapping (address => Receipt) receipts;
@@ -279,6 +280,7 @@ contract GovernorAlpha {
         newProposal.againstVotes = 0;
         newProposal.canceled = false;
         newProposal.executed = false;
+        newProposal.quorumVotes = quorumVotes();
 
         latestProposalIds[newProposal.proposer] = newProposal.id;
 
@@ -469,7 +471,7 @@ contract GovernorAlpha {
             return ProposalState.Pending;
         } else if (block.number <= proposal.endBlock) {
             return ProposalState.Active;
-        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < quorumVotes()) {
+        } else if (proposal.forVotes <= proposal.againstVotes || proposal.forVotes < proposal.quorumVotes) {
             return ProposalState.Defeated;
         } else if (proposal.eta == 0) {
             return ProposalState.Succeeded;
