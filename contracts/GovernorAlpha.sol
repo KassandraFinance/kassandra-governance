@@ -307,6 +307,7 @@ contract GovernorAlpha {
         uint eta = block.timestamp + timelock.delay();
         for (uint i = 0; i < proposal.targets.length; i++) {
             bytes32 expectedHash = keccak256(abi.encode(
+                proposalId,
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],
@@ -318,6 +319,7 @@ contract GovernorAlpha {
                 "ERR_ACTION_ALREADY_QUEUED_AT_ETA"
             );
             bytes32 txHash = timelock.queueTransaction(
+                proposalId,
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],
@@ -339,6 +341,7 @@ contract GovernorAlpha {
         proposal.executed = true;
         for (uint i = 0; i < proposal.targets.length; i++) {
             bytes memory returnData = timelock.executeTransaction{value: proposal.values[i]}(
+                proposalId,
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],
@@ -369,6 +372,7 @@ contract GovernorAlpha {
         proposal.canceled = true;
         for (uint i = 0; i < proposal.targets.length; i++) {
             timelock.cancelTransaction(
+                proposalId,
                 proposal.targets[i],
                 proposal.values[i],
                 proposal.signatures[i],

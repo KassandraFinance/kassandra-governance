@@ -23,6 +23,7 @@ contract Timelock {
     );
     event CancelTransaction(
         bytes32 indexed txHash,
+        uint indexed proposalId,
         address indexed target,
         uint value,
         string signature,
@@ -31,6 +32,7 @@ contract Timelock {
     );
     event ExecuteTransaction(
         bytes32 indexed txHash,
+        uint indexed proposalId,
         address indexed target,
         uint value,
         string signature,
@@ -39,6 +41,7 @@ contract Timelock {
     );
     event QueueTransaction(
         bytes32 indexed txHash,
+        uint indexed proposalId,
         address indexed target,
         uint value,
         string signature,
@@ -83,6 +86,7 @@ contract Timelock {
     }
 
     function queueTransaction(
+        uint proposalId,
         address target,
         uint value,
         string memory signature,
@@ -95,14 +99,18 @@ contract Timelock {
         require(msg.sender == admin, "ERR_NOT_CONTROLLER");
         require(eta >= block.timestamp + delay, "ERR_ETA_BELOW_DELAY");
 
-        bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+        bytes32 txHash = keccak256(abi.encode(proposalId, target, value, signature, data, eta));
+
+        require(!queuedTransactions[txHash], "ERR_TRANSACTION_ALREADY_QUEUED");
+
         queuedTransactions[txHash] = true;
 
-        emit QueueTransaction(txHash, target, value, signature, data, eta);
+        emit QueueTransaction(txHash, proposalId, target, value, signature, data, eta);
         return txHash;
     }
 
     function cancelTransaction(
+        uint proposalId,
         address target,
         uint value,
         string memory signature,
@@ -113,13 +121,17 @@ contract Timelock {
     {
         require(msg.sender == admin, "ERR_NOT_CONTROLLER");
 
-        bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+        bytes32 txHash = keccak256(abi.encode(proposalId, target, value, signature, data, eta));
+
+        require(queuedTransactions[txHash], "ERR_TRANSACTION_NOT_QUEUED");
+
         queuedTransactions[txHash] = false;
 
-        emit CancelTransaction(txHash, target, value, signature, data, eta);
+        emit CancelTransaction(txHash, proposalId, target, value, signature, data, eta);
     }
 
     function executeTransaction(
+        uint proposalId,
         address target,
         uint value,
         string memory signature,
@@ -132,7 +144,8 @@ contract Timelock {
     {
         require(msg.sender == admin, "ERR_NOT_CONTROLLER");
 
-        bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+        bytes32 txHash = keccak256(abi.encode(proposalId, target, value, signature, data, eta));
+
         require(queuedTransactions[txHash], "ERR_TRANSACTION_NOT_QUEUED");
         require(block.timestamp >= eta, "ERR_DELAY_NOT_PASSED");
         require(block.timestamp <= eta + GRACE_PERIOD, "ERR_TRANSACTION_IS_STALE");
@@ -151,7 +164,7 @@ contract Timelock {
         (bool success, bytes memory returnData) = target.call{value: value}(callData);
         require(success, "ERR_EXECUTION_REVERTED");
 
-        emit ExecuteTransaction(txHash, target, value, signature, data, eta);
+        emit ExecuteTransaction(txHash, proposalId, target, value, signature, data, eta);
 
         return returnData;
     }
