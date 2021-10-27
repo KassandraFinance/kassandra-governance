@@ -201,8 +201,8 @@ contract Staking is StakingGov, Pausable, ReentrancyGuard, Ownable {
         } else if (block.timestamp >= user.depositTime + pool.lockPeriod + pool.vestingPeriod) {
             return user.amount;
         } else {
-            return user.amount * (
-                block.timestamp - user.depositTime)/(pool.lockPeriod + pool.vestingPeriod
+            return (user.amount + user.withdrawn) * (
+                block.timestamp - user.depositTime - pool.lockPeriod )/(pool.vestingPeriod
             ) - user.withdrawn;
         }
     }
