@@ -364,6 +364,7 @@ contract GovernorAlpha {
     function cancel(uint proposalId) public {
         ProposalState curState = state(proposalId);
         require(curState != ProposalState.Executed, "ERR_ALREADY_EXECUTED");
+        require(curState != ProposalState.Canceled, "ERR_ALREADY_CANCELED");
 
         Proposal storage proposal = proposals[proposalId];
         require(
