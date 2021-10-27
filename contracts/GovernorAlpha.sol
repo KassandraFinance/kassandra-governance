@@ -357,7 +357,7 @@ contract GovernorAlpha {
 
     /**
      * @notice Cancel a proposal that is not yet executed
-     *         The proposer needs to have less vote power than required for a proposal for it to be cancelled
+     *         The proposer needs to have more vote power than the threshold for it to be cancelled
      *
      * @param proposalId - Proposal to be cancelled
      */
@@ -367,9 +367,11 @@ contract GovernorAlpha {
         require(curState != ProposalState.Canceled, "ERR_ALREADY_CANCELED");
 
         Proposal storage proposal = proposals[proposalId];
+
+        require(proposal.proposer == msg.sender, "ERR_NOT_PROPOSER");
         require(
-            kassandra.getPriorVotes(proposal.proposer, block.number - 1) < proposalThreshold(),
-            "ERR_PROPOSER_ABOVE_THRESHOLD"
+            kassandra.getPriorVotes(proposal.proposer, block.number - 1) > proposalThreshold(),
+            "ERR_NOT_ABOVE_THRESHOLD"
         );
 
         proposal.canceled = true;
