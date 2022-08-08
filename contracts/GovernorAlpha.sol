@@ -224,6 +224,13 @@ contract GovernorAlpha {
     }
 
     /**
+     * @notice Make timelock accept this contract as its owner
+     */
+    function acceptAdmin() external onlyOwner {
+        timelock.acceptAdmin();
+    }
+
+    /**
      * @notice Make a new proposal
      *
      * @param targets - Contracts that will have a function called
