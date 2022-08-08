@@ -73,7 +73,7 @@ contract GovernorAlpha {
     uint public quorum = 25; // 4% of total voting power
     uint public proposerPower = 100; // 1% of total voting power
     /// @notice The duration of voting on a proposal, in blocks
-    uint public votingPeriod = 40_320; // ~7 days in blocks (assuming 15s blocks)
+    uint public votingPeriod = 216_000; // ~5 days in blocks (assuming 2s blocks)
     /// @notice The delay, in blocks, before voting on a proposal may take place, once proposed
     uint public votingDelay = 1;
     /// @notice The total number of proposals
@@ -187,7 +187,7 @@ contract GovernorAlpha {
      * @param period - Time voting stays open in blocks
      */
     function setVotingPeriod(uint period) external onlyOwner {
-        require(period > 11_520, "ERR_MIN_TWO_DAYS");
+        require(period > 86_400, "ERR_MIN_TWO_DAYS");
         votingPeriod = period;
         emit NewVotingPeriod(votingPeriod);
     }
